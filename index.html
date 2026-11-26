@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="./manifest.json" />
+  <title>Workout Tracker</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #111827; color: #f9fafb; margin: 0; padding: 20px; }
+    .card { background: #1f2937; padding: 16px; border-radius: 12px; margin-bottom: 16px; }
+    input, button { width: 100%; padding: 12px; margin-top: 8px; border-radius: 8px; border: none; font-size: 16px; box-sizing: border-box; }
+    input { background: #374151; color: #fff; }
+    button { background: #3b82f6; color: #fff; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #4b5563; }
+    .log-item { border-bottom: 1px solid #374151; padding: 10px 0; font-size: 14px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Login Screen -->
+  <div id="auth-section" class="card">
+    <h2>Sign In</h2>
+    <input type="email" id="email" placeholder="Email" />
+    <input type="password" id="password" placeholder="Password" />
+    <button id="login-btn">Log In</button>
+    <p id="auth-error" style="color:#f87171; font-size:14px;"></p>
+  </div>
+
+  <!-- Main Workout App -->
+  <div id="app-section" class="hidden">
+    <div class="card">
+      <h2>Log a Set</h2>
+      <input type="text" id="exercise" placeholder="Exercise (e.g., Bench Press)" />
+      <input type="number" id="weight" placeholder="Weight (lbs)" inputmode="decimal" />
+      <input type="number" id="reps" placeholder="Reps" inputmode="numeric" />
+      <button id="save-btn">Save Set</button>
+    </div>
+
+    <div class="card">
+      <h3>Recent Sets</h3>
+      <div id="history-list">Loading...</div>
+    </div>
+
+    <button id="logout-btn" class="secondary">Sign Out</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+    // REPLACE WITH YOUR FIREBASE CONFIG
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const authSection = document.getElementById("auth-section");
+    const appSection = document.getElementById("app-section");
+    const historyList = document.getElementById("history-list");
+
+    // Watch login state
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        authSection.classList.add("hidden");
+        appSection.classList.remove("hidden");
+        loadRecentSets();
+      } else {
+        authSection.classList.remove("hidden");
+        appSection.classList.add("hidden");
+      }
+    });
+
+    // Sign in
+    document.getElementById("login-btn").addEventListener("click", async () => {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (err) {
+        document.getElementById("auth-error").textContent = err.message;
+      }
+    });
+
+    // Save set to Firestore
+    document.getElementById("save-btn").addEventListener("click", async () => {
+      const exercise = document.getElementById("exercise").value.trim();
+      const weight = Number(document.getElementById("weight").value);
+      const reps = Number(document.getElementById("reps").value);
+      if (!exercise || !reps) return alert("Enter an exercise and reps.");
+
+      await addDoc(collection(db, "workout_sets"), {
+        exercise,
+        weight,
+        reps,
+        estimated1RM: Math.round(weight * (1 + reps / 30)),
+        createdAt: serverTimestamp()
+      });
+
+      document.getElementById("weight").value = "";
+      document.getElementById("reps").value = "";
+    });
+
+    // Live-load recent sets
+    function loadRecentSets() {
+      const q = query(collection(db, "workout_sets"), orderBy("createdAt", "desc"), limit(15));
+      onSnapshot(q, (snapshot) => {
+        historyList.innerHTML = "";
+        snapshot.forEach((doc) => {
+          const d = doc.data();
+          const div = document.createElement("div");
+          div.className = "log-item";
+          div.textContent = `${d.exercise}: ${d.weight} lbs × ${d.reps} reps (Est. 1RM: ${d.estimated1RM} lbs)`;
+          historyList.appendChild(div);
+        });
+      });
+    }
+
+    document.getElementById("logout-btn").addEventListener("click", () => signOut(auth));
+  </script>
+</body>
+</html>
