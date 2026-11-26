@@ -14,6 +14,7 @@
     input, button { width: 100%; padding: 12px; margin-top: 8px; border-radius: 8px; border: none; font-size: 16px; box-sizing: border-box; }
     input { background: #374151; color: #fff; }
     button { background: #3b82f6; color: #fff; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
     button.secondary { background: #4b5563; }
     button.danger { background: #dc2626; }
     .row { display: flex; gap: 8px; margin-top: 8px; }
@@ -34,8 +35,8 @@
   <!-- Login Screen -->
   <div id="auth-section" class="card">
     <h2>Sign In</h2>
-    <input type="email" id="email" placeholder="Email" />
-    <input type="password" id="password" placeholder="Password" />
+    <input type="email" id="email" placeholder="Email" autocomplete="email" />
+    <input type="password" id="password" placeholder="Password" autocomplete="current-password" />
     <button id="login-btn">Log In</button>
     <p id="auth-error" style="color:#f87171; font-size:14px;"></p>
   </div>
@@ -154,7 +155,6 @@
       }
     });
 
-    // Re-acquire Wake Lock automatically when returning to the app
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && wakeLockDesired && auth.currentUser) {
         enableWakeLock();
@@ -169,6 +169,7 @@
 
     const timerDisplay = document.getElementById("timer-display");
     const timerToggle = document.getElementById("timer-toggle");
+    const timerReset = document.getElementById("timer-reset");
     const defaultRestLabel = document.getElementById("default-rest-label");
 
     function formatTime(totalSec) {
@@ -280,13 +281,29 @@
       }
     });
 
-    document.getElementById("login-btn").addEventListener("click", async () => {
-      const email = document.getElementById("email").value;
+    const loginBtn = document.getElementById("login-btn");
+    const authError = document.getElementById("auth-error");
+
+    loginBtn.addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
+      authError.textContent = "";
+
+      if (!email || !password) {
+        authError.textContent = "Please enter both your email and password.";
+        return;
+      }
+
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Signing in...";
+
       try {
         await signInWithEmailAndPassword(auth, email, password);
       } catch (err) {
-        document.getElementById("auth-error").textContent = err.message;
+        authError.textContent = err.message;
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "Log In";
       }
     });
 
@@ -296,7 +313,6 @@
       const reps = Number(document.getElementById("reps").value);
       if (!exercise || !reps) return alert("Enter an exercise and reps.");
 
-      // Start rest timer immediately on tap
       startTimer(defaultRestSeconds);
 
       await addDoc(collection(db, "workout_sets"), {
